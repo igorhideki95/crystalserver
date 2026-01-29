@@ -1,0 +1,108 @@
+--==============================================================
+--  TalkAction: /punish
+--  Aplica uma condição de dano periódico baseada em elemento
+--  Uso: /punish NomeDoPlayer, elemento, dano, duracao(ms)
+--==============================================================
+
+local punish = TalkAction("/punish")
+
+--==============================================================
+--  Tabela de elementos suportados
+--  Cada entrada define:
+--   • condition = tipo da condição no servidor
+--   • effect    = efeito visual exibido ao aplicar
+--==============================================================
+local PunishElements = {
+    fire     = { condition = CONDITION_FIRE,     effect = CONST_ME_FIREAREA },
+    poison   = { condition = CONDITION_POISON,   effect = CONST_ME_POISONAREA },
+    energy   = { condition = CONDITION_ENERGY,   effect = CONST_ME_ENERGYAREA },
+    bleeding = { condition = CONDITION_BLEEDING, effect = CONST_ME_DRAWBLOOD },
+    ice      = { condition = CONDITION_FREEZING, effect = CONST_ME_ICEAREA },
+    death    = { condition = CONDITION_CURSED,   effect = CONST_ME_MORTAREA },
+    drown    = { condition = CONDITION_DROWN,    effect = CONST_ME_BUBBLES },
+    agony    = { condition = CONDITION_AGONY,    effect = CONST_ME_SMALLCLOUDS }
+}
+
+--==============================================================
+--  Função executada quando o comando é usado
+--==============================================================
+function punish.onSay(player, words, param)
+
+    -- Verifica se os parâmetros foram informados
+    if param == "" then
+        player:sendCancelMessage(
+            "Usage: /punish playerName, element, damage, duration(ms)\n" ..
+            "Elements: fire, poison, energy, bleeding, ice, death, drown, agony"
+        )
+        return true
+    end
+
+    -- Divide os parâmetros por vírgula
+    local split = param:split(",")
+
+    -- Extrai e trata os valores recebidos
+    local targetName = split[1] and split[1]:trim()
+    local elementKey = split[2] and split[2]:trim():lower()
+    local damage     = tonumber(split[3]) or 30       -- Dano padrão
+    local duration   = tonumber(split[4]) or 10000    -- Duração padrão (10s)
+
+    --==========================================================
+    --  Validação do jogador alvo
+    --==========================================================
+    local target = Player(targetName)
+    if not target then
+        player:sendCancelMessage("Player not online.")
+        return true
+    end
+
+    --==========================================================
+    --  Validação do elemento
+    --==========================================================
+    local element = PunishElements[elementKey]
+    if not element then
+        player:sendCancelMessage("Invalid element.")
+        return true
+    end
+
+    --==========================================================
+    --  Remove condição anterior do mesmo tipo (evita stacking)
+    --==========================================================
+    target:removeCondition(element.condition)
+
+    --==========================================================
+    --  Criação da condição de dano periódico
+    --==========================================================
+    local condition = Condition(element.condition)
+
+    condition:setParameter(CONDITION_PARAM_DELAYED, 1) -- Dano ao longo do tempo
+    condition:setParameter(CONDITION_PARAM_TICKS, duration) -- Duração total
+    condition:setParameter(CONDITION_PARAM_PERIODICDAMAGE, -math.abs(damage)) 
+    -- Valor negativo = dano
+
+    -- Aplica a condição no jogador alvo
+    target:addCondition(condition)
+
+    --==========================================================
+    --  Feedback visual e mensagens
+    --==========================================================
+    target:getPosition():sendMagicEffect(element.effect)
+
+    target:sendTextMessage(
+        MESSAGE_EVENT_ADVANCE,
+        "You are suffering a " .. elementKey .. " punishment."
+    )
+
+    player:sendTextMessage(
+        MESSAGE_EVENT_ADVANCE,
+        "Punishment applied to " .. target:getName() .. "."
+    )
+
+    return true
+end
+
+--==============================================================
+--  Configurações do TalkAction
+--==============================================================
+punish:separator(" ")     -- Define separador de parâmetros
+punish:groupType("god")   -- Apenas GOD pode usar
+punish:register()         -- Registra o comando no servidor
